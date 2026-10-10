@@ -10,13 +10,21 @@ import (
 	"github.com/LiZeC123/lsm/internal/errs"
 )
 
-// cli runs the whole command tree in process and reports what the user would
-// see on stdout, stderr and as the process exit code.
+// cli runs the whole command tree in process with an empty standard input and
+// reports what the user would see on stdout, stderr and as the process exit
+// code.
 func cli(t *testing.T, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
+	return run(t, "", args...)
+}
+
+// run is cli with a scripted standard input, for the interactive commands.
+func run(t *testing.T, stdin string, args ...string) (stdout, stderr string, code int) {
 	t.Helper()
 	var out, errOut bytes.Buffer
 	root := newRootCmd()
 	root.SetArgs(args)
+	root.SetIn(strings.NewReader(stdin))
 	code = execute(root, &out, &errOut)
 	return out.String(), errOut.String(), code
 }

@@ -45,6 +45,8 @@ launched detached from the terminal, so they keep running after lsm exits.`,
 		newRestartCmd(),
 		newPsCmd(),
 		newListCmd(),
+		newAddCmd(),
+		newDelCmd(),
 	)
 	return root
 }

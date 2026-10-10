@@ -3,6 +3,7 @@ package service
 import (
 	"time"
 
+	"github.com/LiZeC123/lsm/internal/config"
 	"github.com/LiZeC123/lsm/internal/process"
 )
 
@@ -35,27 +36,45 @@ func (m *Manager) Status() ([]Status, error) {
 	statuses := make([]Status, 0, len(names))
 
 	for _, name := range names {
-		svc := m.cfg.Services[name]
-		status := Status{Name: name, Command: svc.Command, WorkDir: svc.WorkDir}
-
-		info, err := process.ReadPIDFile(m.pidPath(name))
+		status, err := m.observe(name, m.cfg.Services[name], now)
 		if err != nil {
 			return nil, err
-		}
-		switch {
-		case info == nil:
-			// never started through lsm
-		case process.IsAlive(*info):
-			status.Running = true
-			status.PID = info.PID
-			status.Uptime = info.Uptime(now)
-			if info.StartedAt > 0 {
-				status.StartedAt = time.Unix(info.StartedAt, 0)
-			}
-		default:
-			status.StalePID = true
 		}
 		statuses = append(statuses, status)
 	}
 	return statuses, nil
+}
+
+// StatusOf reports the runtime state of a single service.
+func (m *Manager) StatusOf(name string) (Status, error) {
+	svc, err := m.lookup(name)
+	if err != nil {
+		return Status{}, err
+	}
+	return m.observe(name, svc, time.Now())
+}
+
+// observe combines the configured service with the state recorded in its PID
+// file.
+func (m *Manager) observe(name string, svc config.Service, now time.Time) (Status, error) {
+	status := Status{Name: name, Command: svc.Command, WorkDir: svc.WorkDir}
+
+	info, err := process.ReadPIDFile(m.pidPath(name))
+	if err != nil {
+		return Status{}, err
+	}
+	switch {
+	case info == nil:
+		// never started through lsm
+	case process.IsAlive(*info):
+		status.Running = true
+		status.PID = info.PID
+		status.Uptime = info.Uptime(now)
+		if info.StartedAt > 0 {
+			status.StartedAt = time.Unix(info.StartedAt, 0)
+		}
+	default:
+		status.StalePID = true
+	}
+	return status, nil
 }

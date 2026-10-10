@@ -17,12 +17,12 @@ detached from the terminal, so it keeps running after lsm exits. Its standard
 streams are discarded.`,
 		Args: argsExact(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mgr, _, err := loadManager()
+			s, err := newSession()
 			if err != nil {
 				return err
 			}
 			name := args[0]
-			pid, err := mgr.Start(name)
+			pid, err := s.mgr.Start(name)
 			if err != nil {
 				return err
 			}

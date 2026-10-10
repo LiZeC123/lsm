@@ -16,12 +16,12 @@ A running service is stopped first and then started again; a service that is
 not running is simply started.`,
 		Args: argsExact(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mgr, _, err := loadManager()
+			s, err := newSession()
 			if err != nil {
 				return err
 			}
 			name := args[0]
-			result, err := mgr.Restart(name)
+			result, err := s.mgr.Restart(name)
 			if err != nil {
 				return err
 			}

@@ -13,11 +13,11 @@ func newPsCmd() *cobra.Command {
 		Short: "Show the runtime status of every configured service",
 		Args:  argsNone(),
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			mgr, _, err := loadManager()
+			s, err := newSession()
 			if err != nil {
 				return err
 			}
-			statuses, err := mgr.Status()
+			statuses, err := s.mgr.Status()
 			if err != nil {
 				return err
 			}

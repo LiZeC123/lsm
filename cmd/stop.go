@@ -17,12 +17,12 @@ SIGKILL if it has not exited after ten seconds. Stopping a service that is not
 running succeeds and reports that fact.`,
 		Args: argsExact(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			mgr, _, err := loadManager()
+			s, err := newSession()
 			if err != nil {
 				return err
 			}
 			name := args[0]
-			result, err := mgr.Stop(name)
+			result, err := s.mgr.Stop(name)
 			if err != nil {
 				return err
 			}
