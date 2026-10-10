@@ -13,8 +13,12 @@ jobs:
   # Nothing is published unless the tagged revision passes the same checks CI
   # runs, so a tag can never produce a broken release.
   verify:
-    name: verify
-    runs-on: ubuntu-latest
+    name: verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
