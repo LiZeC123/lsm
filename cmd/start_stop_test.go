@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/LiZeC123/lsm/internal/config"
 	"github.com/LiZeC123/lsm/internal/errs"
 )
 
@@ -20,19 +21,31 @@ func idleCommand() string {
 
 // serviceFixture writes a config file holding one service with an existing
 // work_dir and returns the config path.
+//
+// The document is produced through config.Save rather than string
+// concatenation, so that a Windows answer such as C:\Users\... survives YAML
+// quoting unchanged.
 func serviceFixture(t *testing.T, name, command string) string {
 	t.Helper()
+	cfgPath, workDir := servicePaths(t)
+	cfg := &config.Config{Services: map[string]config.Service{
+		name: {Command: command, WorkDir: filepath.ToSlash(workDir)},
+	}}
+	if err := cfg.Save(cfgPath); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	return cfgPath
+}
+
+// servicePaths returns a config path and an existing sibling work directory.
+func servicePaths(t *testing.T) (cfgPath, workDir string) {
+	t.Helper()
 	dir := t.TempDir()
-	workDir := filepath.Join(dir, "work")
+	workDir = filepath.Join(dir, "work")
 	if err := os.MkdirAll(workDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(dir, "config.yaml")
-	doc := "services:\n  " + name + ":\n    command: " + command + "\n    work_dir: " + workDir + "\n"
-	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return filepath.Join(dir, "config.yaml"), workDir
 }
 
 func TestStartStopLifecycleThroughTheCLI(t *testing.T) {
@@ -94,9 +107,11 @@ func TestStartStopUnknownServiceExitsWithThree(t *testing.T) {
 func TestStartWithAMissingWorkDirExitsWithEight(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
-	doc := "services:\n  web:\n    command: " + idleCommand() + "\n    work_dir: " + filepath.Join(dir, "gone") + "\n"
-	if err := os.WriteFile(path, []byte(doc), 0o644); err != nil {
-		t.Fatal(err)
+	cfg := &config.Config{Services: map[string]config.Service{
+		"web": {Command: idleCommand(), WorkDir: filepath.ToSlash(filepath.Join(dir, "gone"))},
+	}}
+	if err := cfg.Save(path); err != nil {
+		t.Fatalf("Save: %v", err)
 	}
 
 	_, stderr, code := cli(t, "start", "web", "--config", path)
