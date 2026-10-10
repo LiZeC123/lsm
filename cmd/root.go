@@ -42,6 +42,8 @@ launched detached from the terminal, so they keep running after lsm exits.`,
 	root.AddCommand(
 		newStartCmd(),
 		newStopCmd(),
+		newRestartCmd(),
+		newPsCmd(),
 		newListCmd(),
 	)
 	return root

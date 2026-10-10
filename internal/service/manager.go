@@ -139,3 +139,23 @@ func (m *Manager) Stop(name string) (StopResult, error) {
 	}
 	return StopResult{WasRunning: true, PID: info.PID}, nil
 }
+
+// RestartResult reports whether the service had to be stopped first.
+type RestartResult struct {
+	WasRunning bool
+	PID        int
+}
+
+// Restart stops a running service and starts it again. A service that was not
+// running is simply started (dev.md §5.4).
+func (m *Manager) Restart(name string) (RestartResult, error) {
+	stopped, err := m.Stop(name)
+	if err != nil {
+		return RestartResult{}, err
+	}
+	pid, err := m.Start(name)
+	if err != nil {
+		return RestartResult{}, err
+	}
+	return RestartResult{WasRunning: stopped.WasRunning, PID: pid}, nil
+}
