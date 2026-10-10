@@ -47,12 +47,15 @@ func TestSaveLoadRoundTripKeepsTrickyCommands(t *testing.T) {
 	dir, workDir := scratch(t)
 	path := filepath.Join(dir, "config.yaml")
 
+	// Load normalises work_dir with filepath.ToSlash (dev.md §3.4), so the
+	// expected values carry the slash form on every platform.
+	slashWorkDir := filepath.ToSlash(workDir)
 	want := map[string]Service{
-		"quotes":    {Command: `node ./server.js --bind "127.0.0.1:8080"`, WorkDir: workDir},
-		"pipeline":  {Command: `cat in.txt | grep -v "^#" | sort > out.txt`, WorkDir: workDir},
-		"backslash": {Command: `C:\Python311\python.exe app.py`, WorkDir: workDir},
-		"dollar":    {Command: `sh -c 'echo $HOME && echo "a b"'`, WorkDir: workDir},
-		"multiline": {Command: "line1\nline2", WorkDir: workDir},
+		"quotes":    {Command: `node ./server.js --bind "127.0.0.1:8080"`, WorkDir: slashWorkDir},
+		"pipeline":  {Command: `cat in.txt | grep -v "^#" | sort > out.txt`, WorkDir: slashWorkDir},
+		"backslash": {Command: `C:\Python311\python.exe app.py`, WorkDir: slashWorkDir},
+		"dollar":    {Command: `sh -c 'echo $HOME && echo "a b"'`, WorkDir: slashWorkDir},
+		"multiline": {Command: "line1\nline2", WorkDir: slashWorkDir},
 	}
 	if err := (&Config{Services: want}).Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -119,7 +122,9 @@ func TestSaveIsDeterministicAndSorted(t *testing.T) {
 func TestSaveUsesTwoSpaceIndentation(t *testing.T) {
 	dir, workDir := scratch(t)
 	path := filepath.Join(dir, "config.yaml")
-	cfg := &Config{Services: map[string]Service{"web": {Command: "run", WorkDir: workDir}}}
+	cfg := &Config{Services: map[string]Service{
+		"web": {Command: "run", WorkDir: filepath.ToSlash(workDir)},
+	}}
 	if err := cfg.Save(path); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -128,9 +133,15 @@ func TestSaveUsesTwoSpaceIndentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "services:\n  web:\n    command: run\n    work_dir: " + workDir + "\n"
-	if got := string(data); got != want {
-		t.Fatalf("got:\n%q\nwant:\n%q", got, want)
+	// Assert the layout rather than the whole document: how yaml.v3 quotes a
+	// platform specific path is not what this test is about.
+	for _, want := range []string{"services:\n", "\n  web:\n", "\n    command: run\n", "\n    work_dir: "} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("document is not two-space indented, missing %q:\n%s", want, data)
+		}
+	}
+	if !strings.HasSuffix(string(data), filepath.ToSlash(workDir)+"\n") {
+		t.Fatalf("work_dir is not the last line:\n%s", data)
 	}
 }
 

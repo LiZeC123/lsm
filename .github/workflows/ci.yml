@@ -111,3 +111,75 @@ jobs:
               GOOS="$goos" GOARCH="$goarch" go build -o /dev/null .
             done
           done
+
+  # TEMPORARY probe: one job per suspect test so the job *name* itself reports
+  # which assertion fails on Windows. GitHub only exposes step conclusions
+  # without repo admin rights, so this is how the failure is localised.
+  probe-windows:
+    name: probe ${{ matrix.test }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: ./internal/config
+            test: TestLoadMissingFileYieldsAnEmptyConfig
+          - pkg: ./internal/config
+            test: TestSaveLoadRoundTripKeepsTrickyCommands
+          - pkg: ./internal/config
+            test: TestSaveIsDeterministicAndSorted
+          - pkg: ./internal/config
+            test: TestSaveUsesTwoSpaceIndentation
+          - pkg: ./internal/config
+            test: TestSaveCreatesTheDirectoryAndLeavesNoTemporaryFiles
+          - pkg: ./internal/config
+            test: TestSavePreservesTheModeOfAnExistingConfig
+          - pkg: ./internal/config
+            test: TestSaveRejectsAnInvalidConfigWithoutTouchingTheFile
+          - pkg: ./internal/config
+            test: TestLoadReportsYAMLSyntaxErrors
+          - pkg: ./internal/config
+            test: TestLoadValidatesSchema
+          - pkg: ./internal/config
+            test: TestLoadAcceptsAServiceWhoseWorkDirIsGone
+          - pkg: ./internal/config
+            test: TestCheckWorkDir
+          - pkg: ./internal/config
+            test: TestLoadToleratesAnEmptyDocument
+          - pkg: ./internal/config
+            test: TestNamesIsSorted
+          - pkg: ./internal/config
+            test: TestValidName
+          - pkg: ./internal/process
+            test: TestLaunchAndStopLifecycle
+          - pkg: ./internal/process
+            test: TestLaunchReportsACommandThatCannotRun
+          - pkg: ./internal/process
+            test: TestStopReportsAnAlreadyDeadProcess
+          - pkg: ./internal/process
+            test: TestStartedBeforeNeedsATimestamp
+          - pkg: ./internal/process
+            test: TestIsAliveRejectsNonPositivePIDs
+          - pkg: ./internal/process
+            test: TestStopRejectsAnInvalidPID
+          - pkg: ./internal/process
+            test: TestPIDFileRoundTrip
+          - pkg: ./internal/process
+            test: TestWritePIDFileCreatesAPrivateRunDirectory
+          - pkg: ./internal/process
+            test: TestReadPIDFileMissingIsNotAnError
+          - pkg: ./internal/process
+            test: TestReadPIDFileRejectsBrokenContent
+          - pkg: ./internal/process
+            test: TestRemovePIDFileToleratesAMissingFile
+          - pkg: ./internal/process
+            test: TestUptime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: run one test
+        shell: bash
+        run: go test ${{ matrix.pkg }} -run '^${{ matrix.test }}$' -count=1 -v
