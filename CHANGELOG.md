@@ -28,6 +28,13 @@
 - 交互式 `add`：逐项提问、逐项校验并在失败时重新提问，相对工作目录自动解析为绝对路径。
 - 交互式 `del`：删除前确认；服务运行中时拒绝删除，除非给出 `--force`（先停止再删除）。
 - 退出码约定（0–8）与 `LSM_DEBUG=1` 错误链输出。
+- `lsm version` 与 `lsm --version`：版本号、git 修订与构建时间由发布流程通过 `-ldflags` 注入，
+  源码构建时显示 `lsm dev`。
+- `scripts/build-release.sh`：构建 linux/darwin/windows × amd64/arm64 六个平台的压缩包
+  （内含二进制、README、LICENSE）并生成 `SHA256SUMS`，产出不完整时直接失败。
+- `.github/workflows/release.yml`：推送 `v*` tag 时先跑 vet 与全部测试，通过后打包、
+  校验校验和、用真实二进制确认版本注入，最后创建 GitHub Release。CI 中的
+  `release packaging` 任务会在每次推送时跑同一个脚本，避免到发版才发现问题。
 - 测试：各模块单元测试、以真实进程为对象的生命周期测试、覆盖完整交互序列的
   `tests/` 集成测试；GitHub Actions 三平台矩阵 + `-race` + `gofmt` + 交叉编译。
 - 文档：README（安装、用法、配置、退出码、限制）。

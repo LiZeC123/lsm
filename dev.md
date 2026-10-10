@@ -161,6 +161,7 @@ PID 文件存放在配置目录下的 `run/` 子目录：
 | `lsm list`           | 列出所有已配置服务     |
 | `lsm add`            | 交互式添加服务         |
 | `lsm del <name>`     | 删除服务配置           |
+| `lsm version`        | 打印版本信息           |
 
 全局参数：`--config <path>`。
 
@@ -263,6 +264,25 @@ Service 'web' deleted.
 ```
 
 删除时同时删除 `run/<name>.pid`（若存在）。
+
+---
+
+### 5.9 version
+
+打印一行版本信息，并由 cobra 自动提供等价的 `--version`：
+
+```
+$ lsm version
+lsm v0.1.0 (commit abc1234, built 2026-10-10T10:00:00Z)
+```
+
+| 字段     | 来源                                                              |
+| -------- | ----------------------------------------------------------------- |
+| 版本号   | `-ldflags -X .../internal/version.Version=<tag>`，tag 触发时注入  |
+| git 修订 | `-ldflags -X .../internal/version.Commit=<短 hash>`               |
+| 构建时间 | `-ldflags -X .../internal/version.Date=<RFC3339 UTC>`             |
+
+用 `go build` 直接构建时不注入任何值，输出为 `lsm dev`。
 
 ---
 
@@ -562,7 +582,12 @@ Windows 集成测试可选用 `timeout /t 300` 或 `ping -n 300 127.0.0.1`。
 
 - 矩阵：`ubuntu-latest`、`macos-latest`、`windows-latest`。
 - 步骤：`go vet` → `go test ./...` → `go build`。
-- 额外任务：`GOOS=linux/darwin/windows GOARCH=amd64/arm64 go build`，确保跨平台编译通过。
+- 额外任务：`GOOS=linux/darwin/windows GOARCH=amd64/arm64 go build`，确保跨平台编译通过；
+  该任务直接运行 `scripts/build-release.sh`（与发布流程同一个脚本）并校验 `SHA256SUMS`，
+  保证打包路径在每次推送时都被验证。
+- `-race` 独立任务，以及 `gofmt` 检查任务。
+- 发布：推送 `v*` tag 触发 `.github/workflows/release.yml`，先跑 vet 与全部测试，
+  通过后打包六个平台、校验校验和、用真实二进制确认版本注入，最后创建 GitHub Release。
 
 ### 10.4 手工验收清单
 

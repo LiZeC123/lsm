@@ -80,22 +80,27 @@ jobs:
             exit 1
           fi
 
-  cross:
-    name: cross compile
+  # Runs the very script the release workflow uses, so a broken archive or a
+  # bad -ldflags value surfaces on every push instead of at tag time.
+  packaging:
+    name: release packaging
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
+
       - name: build every supported target
+        run: ./scripts/build-release.sh v0.0.0-ci
+
+      - name: verify the checksums
+        run: cd dist && sha256sum -c SHA256SUMS
+
+      - name: smoke test a stamped binary
         run: |
           set -euo pipefail
-          for goos in linux darwin windows; do
-            for goarch in amd64 arm64; do
-              echo "==> $goos/$goarch"
-              GOOS="$goos" GOARCH="$goarch" go build -o /dev/null .
-            done
-          done
+          tar -xzf dist/lsm_v0.0.0-ci_linux_amd64.tar.gz -C /tmp
+          /tmp/lsm_v0.0.0-ci_linux_amd64/lsm version

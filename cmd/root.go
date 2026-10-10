@@ -11,6 +11,7 @@ import (
 
 	"github.com/LiZeC123/lsm/internal/config"
 	"github.com/LiZeC123/lsm/internal/errs"
+	"github.com/LiZeC123/lsm/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -33,7 +34,12 @@ Every service is a name, a shell command and a working directory. Services are
 launched detached from the terminal, so they keep running after lsm exits.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Setting Version makes cobra provide --version; the template is
+		// replaced so that `lsm --version` and `lsm version` print the same
+		// line (dev.md §5.9).
+		Version: version.Version,
 	}
+	root.SetVersionTemplate(version.String() + "\n")
 	root.PersistentFlags().StringVar(&configFlag, "config", "",
 		"config file path (default $LSM_CONFIG, then the platform config directory)")
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
@@ -47,6 +53,7 @@ launched detached from the terminal, so they keep running after lsm exits.`,
 		newListCmd(),
 		newAddCmd(),
 		newDelCmd(),
+		newVersionCmd(),
 	)
 	return root
 }

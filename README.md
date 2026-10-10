@@ -13,13 +13,37 @@
 
 ## 安装
 
+### 下载预编译二进制（推荐）
+
+从 [Releases](https://github.com/LiZeC123/lsm/releases) 下载对应平台的压缩包
+（`lsm_<版本>_<系统>_<架构>.tar.gz`，Windows 为 `.zip`；支持 linux / darwin / windows ×
+amd64 / arm64），解压后把二进制放进 `PATH`：
+
+```sh
+VERSION=v0.1.0
+OS=linux        # linux | darwin
+ARCH=amd64      # amd64 | arm64
+
+curl -LO "https://github.com/LiZeC123/lsm/releases/download/${VERSION}/lsm_${VERSION}_${OS}_${ARCH}.tar.gz"
+tar -xzf "lsm_${VERSION}_${OS}_${ARCH}.tar.gz"
+sudo install "lsm_${VERSION}_${OS}_${ARCH}/lsm" /usr/local/bin/
+lsm version
+```
+
+压缩包内附带 `LICENSE` 与 `README.md`，同一 Release 下的 `SHA256SUMS` 可用于校验完整性。
+二进制是静态编译的（`CGO_ENABLED=0`），无需任何运行时依赖。
+
+### 用 Go 安装
+
 需要 **Go 1.24 或更高版本**（原因见下文「设计说明」：Go 1.22 生成的 macOS 二进制无法被新版 `dyld` 加载）。
 
 ```sh
-# 用 Go 安装
 go install github.com/LiZeC123/lsm@latest
+```
 
-# 或者从源码构建
+### 从源码构建
+
+```sh
 git clone https://github.com/LiZeC123/lsm.git
 cd lsm
 go build -o lsm .
@@ -67,6 +91,7 @@ Service 'web' deleted.
 | `lsm list`           | 列出所有已配置的服务                       |
 | `lsm add`            | 交互式添加服务                             |
 | `lsm del <name>`     | 删除服务配置（`--force` 会先停止再删除）   |
+| `lsm version`        | 打印版本、git 修订与构建时间（`--version` 等价） |
 
 全局参数：`--config <path>`。
 
@@ -201,8 +226,17 @@ go vet ./...       # 静态检查
 go test ./...      # 单元测试 + tests/ 集成测试（会构建真实二进制并启动真实进程）
 go build ./...     # 构建
 gofmt -l .         # 格式检查
+
+# 打包全部平台的发布产物到 dist/（README、LICENSE、SHA256SUMS 一并生成）
+./scripts/build-release.sh v0.1.0
 ```
 
-CI 在 `ubuntu-latest`、`macos-latest`、`windows-latest` 上运行 `go vet` / `go test` / `go build`，另外还有 `-race`、`gofmt` 检查和 `linux/darwin/windows × amd64/arm64` 的交叉编译任务。
+CI（`.github/workflows/ci.yml`）在 `ubuntu-latest`、`macos-latest`、`windows-latest` 上运行
+`go vet` / `go test` / `go build`，另外还有 `-race` 任务、`gofmt` 检查，以及一个运行
+`scripts/build-release.sh` 并校验 SHA256SUMS 的打包任务。
+
+给 `v*` 打 tag 会触发 `.github/workflows/release.yml`：先跑一遍 vet 与全部测试，通过后构建
+六个平台的压缩包、校验 SHA256SUMS、用真实二进制确认 `-ldflags` 注入的版本号正确，最后创建
+GitHub Release。
 
 技术方案见 [dev.md](dev.md)。
