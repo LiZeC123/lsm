@@ -24,6 +24,9 @@ const idleCommand = "ping -n 30 127.0.0.1"
 // /T is not optional here. Windows removes a process tree only when it is asked
 // to: killing the shell alone orphans its children, and an orphan keeps a handle
 // on the shell's working directory.
+//
+// It calls taskkill directly rather than through taskkillCommand, so that a test
+// which stubs that seam still gets its process tree cleaned up.
 func killTree(info PIDInfo) error {
 	out, err := exec.Command("taskkill", "/PID", strconv.Itoa(info.PID), "/T", "/F").CombinedOutput()
 	if err != nil {
@@ -139,5 +142,56 @@ func TestIsAliveRejectsNonPositivePIDs(t *testing.T) {
 func TestStopRejectsAnInvalidPID(t *testing.T) {
 	if err := Stop(PIDInfo{PID: 0}); err == nil {
 		t.Fatal("Stop must reject pid 0")
+	}
+}
+
+// The regression behind the v0.1.0 failure: while taskkill walks a process tree,
+// a member can exit on its own. taskkill then reports "There is no running
+// instance of the task" for it and exits non-zero even though it did terminate
+// the service. Success must be judged by the process state, not by that code.
+func TestStopSucceedsWhenTaskkillExitsNonZeroButTheProcessIsGone(t *testing.T) {
+	info := launchIdle(t)
+
+	restore := taskkillCommand
+	taskkillCommand = func(pid int) ([]byte, error) {
+		// Do the real work, then report the failure Windows reports when a tree
+		// member was already gone.
+		_ = exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F").Run()
+		return []byte("ERROR: The process with PID 1234 (child process of PID " +
+				strconv.Itoa(pid) + ") could not be terminated.\n" +
+				"Reason: There is no running instance of the task.\n"),
+			errors.New("exit status 255")
+	}
+	t.Cleanup(func() { taskkillCommand = restore })
+
+	if err := Stop(info); err != nil {
+		t.Fatalf("Stop = %v, want nil: the process is gone, so the stop succeeded", err)
+	}
+	if IsAlive(info) {
+		t.Fatalf("pid %d should be gone", info.PID)
+	}
+}
+
+// The complement: when the process really is still there, the failure must be
+// reported together with taskkill's own explanation.
+func TestStopFailsWhenTaskkillCannotKillTheProcess(t *testing.T) {
+	info := launchIdle(t)
+
+	restore := taskkillCommand
+	taskkillCommand = func(int) ([]byte, error) {
+		return []byte("ERROR: The process could not be terminated.\nReason: Access is denied.\n"),
+			errors.New("exit status 1")
+	}
+	t.Cleanup(func() { taskkillCommand = restore })
+
+	err := Stop(info)
+	if err == nil {
+		t.Fatal("Stop must fail while the process is still running")
+	}
+	if !strings.Contains(err.Error(), "Access is denied") {
+		t.Fatalf("taskkill's explanation must be reported: %v", err)
+	}
+	if !IsAlive(info) {
+		t.Fatal("the process must still be running for this scenario to be meaningful")
 	}
 }

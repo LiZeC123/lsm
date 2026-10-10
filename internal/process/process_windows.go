@@ -33,7 +33,19 @@ const (
 	// granularity of started_at and the 100ns granularity of the recorded
 	// process creation time.
 	creationTolerance = 5 * time.Second
+
+	// taskkillVerifyTimeout is how long Stop waits for the target to actually
+	// disappear once taskkill returns. waitUntil returns the moment it is gone,
+	// so this bound only matters when the kill genuinely did not take effect.
+	taskkillVerifyTimeout = 5 * time.Second
 )
+
+// taskkillCommand runs `taskkill /PID <pid> /T /F` and returns its combined
+// output. It is a variable so tests can reproduce the exit-code races of the
+// real command.
+var taskkillCommand = func(pid int) ([]byte, error) {
+	return exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F").CombinedOutput()
+}
 
 // Launch starts svc detached from the console and returns its PID.
 //
@@ -84,15 +96,23 @@ func Stop(info PIDInfo) error {
 		return ErrNotRunning
 	}
 
-	pid := strconv.Itoa(info.PID)
 	// /T terminates the whole tree, /F forces it.
-	out, err := exec.Command("taskkill", "/PID", pid, "/T", "/F").CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("taskkill /PID %s /T /F failed: %w: %s",
-			pid, err, strings.TrimSpace(string(out)))
+	//
+	// taskkill's exit status is NOT a reliable success signal. While it walks
+	// the tree a member can exit on its own, and taskkill then reports "There is
+	// no running instance of the task" for that PID and exits non-zero even
+	// though it did terminate the service. The outcome is therefore judged by
+	// the process itself: gone means the stop succeeded, regardless of what
+	// taskkill returned.
+	out, err := taskkillCommand(info.PID)
+	if waitUntil(func() bool { return !IsAlive(info) }, taskkillVerifyTimeout) {
+		return nil
 	}
-	waitUntil(func() bool { return !IsAlive(info) }, killGrace)
-	return nil
+	if err != nil {
+		return fmt.Errorf("taskkill /PID %d /T /F failed: %w: %s",
+			info.PID, err, strings.TrimSpace(string(out)))
+	}
+	return fmt.Errorf("pid %d is still running after taskkill /T /F", info.PID)
 }
 
 // startedBefore reports whether the process was already running well before the
