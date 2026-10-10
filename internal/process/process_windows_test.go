@@ -4,8 +4,10 @@ package process
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,15 +18,51 @@ import (
 // used rather than sleep because sleep is not part of cmd.exe.
 const idleCommand = "ping -n 30 127.0.0.1"
 
-func TestLaunchAndStopLifecycle(t *testing.T) {
+// killTree force-kills a process together with its children, mirroring what the
+// product does in Stop.
+//
+// /T is not optional here. Windows removes a process tree only when it is asked
+// to: killing the shell alone orphans its children, and an orphan keeps a handle
+// on the shell's working directory.
+func killTree(info PIDInfo) error {
+	out, err := exec.Command("taskkill", "/PID", strconv.Itoa(info.PID), "/T", "/F").CombinedOutput()
+	if err != nil {
+		// Already gone is not a failure.
+		if waitUntil(func() bool { return !IsAlive(info) }, time.Second) {
+			return nil
+		}
+		return fmt.Errorf("taskkill: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if !waitUntil(func() bool { return !IsAlive(info) }, 5*time.Second) {
+		return fmt.Errorf("pid %d is still reported alive after taskkill", info.PID)
+	}
+	return nil
+}
+
+// launchIdle starts the idle service in a fresh work directory and guarantees
+// that its whole tree is killed afterwards.
+//
+// Windows keeps a handle on a process's working directory for as long as the
+// process lives, so an orphaned child makes t.TempDir's RemoveAll fail with
+// "the process cannot access the file because it is being used by another
+// process" — after the assertions themselves have already passed. The cleanup
+// is registered after t.TempDir and t.Cleanup runs LIFO, so the tree is always
+// killed before the directory is removed.
+func launchIdle(t *testing.T) PIDInfo {
+	t.Helper()
 	svc := config.Service{Command: idleCommand, WorkDir: t.TempDir()}
 	pid, err := Launch(svc)
 	if err != nil {
 		t.Fatalf("Launch: %v", err)
 	}
-	t.Cleanup(func() { _ = Stop(PIDInfo{PID: pid}) })
-
 	info := PIDInfo{PID: pid}
+	t.Cleanup(func() { _ = killTree(info) })
+	return info
+}
+
+func TestLaunchAndStopLifecycle(t *testing.T) {
+	info := launchIdle(t)
+
 	if !IsAlive(info) {
 		t.Fatal("the launched process should be alive")
 	}
@@ -53,7 +91,7 @@ func TestLaunchReportsACommandThatCannotRun(t *testing.T) {
 
 // Stop must classify a process that is already gone as not running. The PID
 // comes from a helper that has finished on its own, so this does not depend on
-// taskkill behaving in any particular way.
+// taskkill behaviour at all.
 func TestStopReportsAnAlreadyDeadProcess(t *testing.T) {
 	helper := exec.Command("cmd", "/S", "/C", "exit 0")
 	if err := helper.Run(); err != nil {
@@ -69,22 +107,16 @@ func TestStopReportsAnAlreadyDeadProcess(t *testing.T) {
 	}
 }
 
-// TestTaskkillRemovesTheProcess pins down the helper primitive itself, so that
-// a failure here is distinguishable from a failure in Stop.
+// TestTaskkillRemovesTheProcess pins down the helper primitive itself, so that a
+// failure here is distinguishable from a failure in Stop.
 func TestTaskkillRemovesTheProcess(t *testing.T) {
-	svc := config.Service{Command: idleCommand, WorkDir: t.TempDir()}
-	pid, err := Launch(svc)
-	if err != nil {
-		t.Fatalf("Launch: %v", err)
-	}
-	info := PIDInfo{PID: pid}
+	info := launchIdle(t)
 
-	out, err := exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/F").CombinedOutput()
-	if err != nil {
-		t.Fatalf("taskkill: %v: %s", err, out)
+	if err := killTree(info); err != nil {
+		t.Fatalf("killTree: %v", err)
 	}
-	if !waitUntil(func() bool { return !IsAlive(info) }, 5*time.Second) {
-		t.Fatalf("pid %d is still reported alive after taskkill", pid)
+	if IsAlive(info) {
+		t.Fatalf("pid %d is still reported alive after taskkill", info.PID)
 	}
 }
 
