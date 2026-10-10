@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# A new push to the same branch supersedes the run in flight instead of
+# queueing behind it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   # Reproducible builds: no local paths are baked into the binaries.
   GOFLAGS: -trimpath
@@ -21,6 +27,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
+    # A hung test must not burn the six hour default.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -44,6 +52,7 @@ jobs:
   race:
     name: race detector
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -55,6 +64,7 @@ jobs:
   formatting:
     name: formatting
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -73,6 +83,7 @@ jobs:
   cross:
     name: cross compile
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
