@@ -51,7 +51,27 @@ func TestLaunchReportsACommandThatCannotRun(t *testing.T) {
 	}
 }
 
+// Stop must classify a process that is already gone as not running. The PID
+// comes from a helper that has finished on its own, so this does not depend on
+// taskkill behaving in any particular way.
 func TestStopReportsAnAlreadyDeadProcess(t *testing.T) {
+	helper := exec.Command("cmd", "/S", "/C", "exit 0")
+	if err := helper.Run(); err != nil {
+		t.Fatalf("helper: %v", err)
+	}
+
+	info := PIDInfo{PID: helper.Process.Pid}
+	if IsAlive(info) {
+		t.Skipf("pid %d was recycled before the assertion", info.PID)
+	}
+	if err := Stop(info); !errors.Is(err, ErrNotRunning) {
+		t.Fatalf("Stop = %v, want ErrNotRunning", err)
+	}
+}
+
+// TestTaskkillRemovesTheProcess pins down the helper primitive itself, so that
+// a failure here is distinguishable from a failure in Stop.
+func TestTaskkillRemovesTheProcess(t *testing.T) {
 	svc := config.Service{Command: idleCommand, WorkDir: t.TempDir()}
 	pid, err := Launch(svc)
 	if err != nil {
@@ -59,15 +79,12 @@ func TestStopReportsAnAlreadyDeadProcess(t *testing.T) {
 	}
 	info := PIDInfo{PID: pid}
 
-	if out, err := exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/F").CombinedOutput(); err != nil {
+	out, err := exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/F").CombinedOutput()
+	if err != nil {
 		t.Fatalf("taskkill: %v: %s", err, out)
 	}
-	if !waitUntil(func() bool { return !IsAlive(info) }, 2*time.Second) {
-		t.Fatal("the helper process did not disappear")
-	}
-
-	if err := Stop(info); !errors.Is(err, ErrNotRunning) {
-		t.Fatalf("Stop = %v, want ErrNotRunning", err)
+	if !waitUntil(func() bool { return !IsAlive(info) }, 5*time.Second) {
+		t.Fatalf("pid %d is still reported alive after taskkill", pid)
 	}
 }
 

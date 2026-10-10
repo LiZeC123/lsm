@@ -116,7 +116,7 @@ jobs:
   # which assertion fails on Windows. GitHub only exposes step conclusions
   # without repo admin rights, so this is how the failure is localised.
   probe-windows:
-    name: probe ${{ matrix.test }}
+    name: probe {{ matrix.test }}
     runs-on: windows-latest
     strategy:
       fail-fast: false
@@ -157,6 +157,8 @@ jobs:
           - pkg: ./internal/process
             test: TestStopReportsAnAlreadyDeadProcess
           - pkg: ./internal/process
+            test: TestTaskkillRemovesTheProcess
+          - pkg: ./internal/process
             test: TestStartedBeforeNeedsATimestamp
           - pkg: ./internal/process
             test: TestIsAliveRejectsNonPositivePIDs
@@ -182,4 +184,4 @@ jobs:
           cache: true
       - name: run one test
         shell: bash
-        run: go test ${{ matrix.pkg }} -run '^${{ matrix.test }}$' -count=1 -v
+        run: go test {{ matrix.pkg }} -run '^{{ matrix.test }}$' -count=1 -v
