@@ -32,11 +32,25 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # This includes the tests/ integration suite, which builds the binary and
-      # exercises add / list / start / ps / restart / stop / del against real
-      # processes (dev.md §10.2).
-      - name: go test
-        run: go test ./... -count=1
+      # TEMPORARY diagnostic split: one step per package so the CI status API
+      # (the only thing readable without repo admin) reveals which package
+      # fails on which OS. Collapse back into `go test ./...` once green.
+      - name: go test (internal/config)
+        run: go test ./internal/config -count=1
+      - name: go test (internal/errs)
+        run: go test ./internal/errs -count=1
+      - name: go test (internal/fsx)
+        run: go test ./internal/fsx -count=1
+      - name: go test (internal/process)
+        run: go test ./internal/process -count=1
+      - name: go test (internal/service)
+        run: go test ./internal/service -count=1
+      - name: go test (internal/ui)
+        run: go test ./internal/ui -count=1
+      - name: go test (cmd)
+        run: go test ./cmd -count=1
+      - name: go test (tests)
+        run: go test ./tests -count=1
 
       - name: go build
         run: go build ./...

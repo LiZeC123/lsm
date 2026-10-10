@@ -32,6 +32,11 @@
   `tests/` 集成测试；GitHub Actions 三平台矩阵 + `-race` + `gofmt` + 交叉编译。
 - 文档：README（安装、用法、配置、退出码、限制）。
 
+### Changed
+
+- 最低 Go 版本由 1.22 提升到 **1.24**：Go 1.22 链接器生成的 macOS arm64 二进制缺少
+  `LC_UUID`，在新版 macOS 上会被 `dyld` 拒绝加载（dev.md §6.7）。
+
 ### Notes
 
 - 被管理的服务的标准流全部丢弃，不提供日志收集。

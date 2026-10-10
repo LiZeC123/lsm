@@ -4,7 +4,7 @@
 
 版本：v0.1（设计稿）
 目标平台：Linux / macOS / Windows
-语言：Go 1.22+
+语言：Go 1.24+（原因见 §6.7）
 
 ---
 
@@ -341,6 +341,30 @@ taskkill /PID <pid> /T /F
 
 - **Unix**：`syscall.Kill(pid, 0)`。返回 `nil` 或 `EPERM` 视为存在；返回 `ESRCH` 视为不存在。
 - **Windows**：`OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid)`，成功则存在。
+
+### 6.7 Go 工具链版本要求
+
+最低版本为 **Go 1.24**，而不是原计划的 1.22。
+
+原因：Go 1.22 链接器生成的 macOS arm64 二进制缺少 `LC_UUID` 这个 Mach-O load command，
+在 macOS 26 上会被 `dyld` 直接拒绝加载：
+
+```
+dyld[64370]: missing LC_UUID load command in /private/tmp/lsm-go1.22.12
+dyld[64370]: missing LC_UUID load command
+```
+
+实测（macOS 26.4.1 / arm64）：
+
+| 工具链     | `LC_UUID` | 能否运行 |
+| ---------- | --------- | -------- |
+| go1.22.12  | 无        | 否       |
+| go1.23.12  | 无        | 是       |
+| go1.24.6   | 有        | 是       |
+| go1.25.1   | 有        | 是       |
+
+Go 1.24 起链接器重新写入 `LC_UUID`。为避免在 macOS 上产出无法启动的二进制，
+`go.mod` 的 `go` 指令固定为 `1.24`，CI 也据此安装工具链。
 
 ---
 

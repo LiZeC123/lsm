@@ -146,7 +146,9 @@ func TestFullLifecycle(t *testing.T) {
 	if got.code != 0 {
 		t.Fatalf("list: exit %d (stderr: %s)", got.code, got.stderr)
 	}
-	if !strings.Contains(got.stdout, name) || !strings.Contains(got.stdout, workDir) {
+	// The stored work_dir is normalised to forward slashes (dev.md §3.4), so
+	// compare against that form rather than the OS one.
+	if !strings.Contains(got.stdout, name) || !strings.Contains(got.stdout, filepath.ToSlash(workDir)) {
 		t.Fatalf("list does not show the new service:\n%s", got.stdout)
 	}
 
