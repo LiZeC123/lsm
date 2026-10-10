@@ -37,7 +37,7 @@
 ```
 ┌──────────────────────────────────────────────────┐
 │                      lsm CLI                      │
-│  (cobra 命令层: start/stop/restart/ps/list/add/del)│
+│ (cobra 命令层: start/stop/restart/ps/ls/add/update/del)│
 └───────────────────────┬──────────────────────────┘
                         │
         ┌───────────────┼───────────────┐
@@ -158,8 +158,9 @@ PID 文件存放在配置目录下的 `run/` 子目录：
 | `lsm stop <name>`    | 停止指定服务           |
 | `lsm restart <name>` | 重启指定服务           |
 | `lsm ps`             | 列出所有服务的运行状态 |
-| `lsm list`           | 列出所有已配置服务     |
+| `lsm ls`             | 列出所有已配置服务     |
 | `lsm add`            | 交互式添加服务         |
+| `lsm update <name>`  | 交互式修改服务的命令或工作目录 |
 | `lsm del <name>`     | 删除服务配置           |
 | `lsm version`        | 打印版本信息           |
 
@@ -208,9 +209,9 @@ worker    running    12401    8m
 
 UPTIME 基于 PID 文件中记录的启动时刻计算。
 
-### 5.6 list
+### 5.6 ls
 
-纯文本表格，列为：`NAME`、`COMMAND`、`WORK_DIR`。
+纯文本表格，列为：`NAME`、`COMMAND`、`WORK_DIR`。命令名与 `ps` 保持同一风格。
 
 ```
 NAME      COMMAND                                       WORK_DIR
@@ -267,7 +268,31 @@ Service 'web' deleted.
 
 ---
 
-### 5.9 version
+### 5.9 update（仅交互式）
+
+依次询问新命令与新工作目录。**每个问题先打印当前值**，直接回车（空输入）表示该项不修改。
+
+```
+$ lsm update web
+Current command: node /home/user/web/server.js --port 3000
+New command (empty to keep): node /home/user/web/server.js --port 8080
+Current working directory: /home/user/web
+New working directory (empty to keep):
+Service 'web' updated.
+```
+
+规则：
+
+- 服务不存在 → 退出码 3。
+- 命令：空输入保持不变；非空则原样存储。
+- 工作目录：空输入保持不变；非空则与 `add` 走同一套校验（相对路径先解析为绝对路径、
+  必须存在且是目录、存储时转正斜杠），校验失败重新询问。
+- 两项都没有改动时不写配置，输出 `Service 'web' unchanged.`。
+- 服务正在运行时允许修改，但**运行中的进程仍使用旧命令**；此时额外输出一行提示：
+  `Note: service 'web' is running (pid 12345); the change takes effect on the next restart.`
+  陈旧 PID 文件不算运行中，不输出该提示。
+
+### 5.10 version
 
 打印一行版本信息，并由 cobra 自动提供等价的 `--version`：
 
@@ -451,8 +476,9 @@ lsm/
 │   ├── stop.go
 │   ├── restart.go
 │   ├── ps.go
-│   ├── list.go
+│   ├── ls.go
 │   ├── add.go
+│   ├── update.go
 │   └── del.go
 ├── internal/
 │   ├── config/
@@ -572,9 +598,11 @@ func (m *Manager) Status() ([]ServiceStatus, error)
 在 Linux 与 macOS 上使用 `sleep 300` 作为测试服务：
 
 1. `lsm add` 交互通过 stdin 注入。
-2. `lsm list` 确认输出。
-3. `lsm start test-svc` → `lsm ps` 显示 running → `lsm stop test-svc` → `lsm ps` 显示 stopped。
-4. `lsm del test-svc --force` 清理。
+2. `lsm ls` 确认输出。
+3. `lsm update test-svc` 改掉命令（工作目录留空不变），再用 `lsm ls` 确认，并核对
+   `run/test-svc.pid` 里记录的是新命令。
+4. `lsm start test-svc` → `lsm ps` 显示 running → `lsm stop test-svc` → `lsm ps` 显示 stopped。
+5. `lsm del test-svc --force` 清理。
 
 Windows 集成测试可选用 `timeout /t 300` 或 `ping -n 300 127.0.0.1`。
 
@@ -592,8 +620,8 @@ Windows 集成测试可选用 `timeout /t 300` 或 `ping -n 300 127.0.0.1`。
 ### 10.4 手工验收清单
 
 - 三平台安装后，`lsm` 无参数输出 help。
-- 首次运行 `lsm list` 在空配置下输出空表格而非报错。
-- 手改配置文件引入 YAML 语法错误，`lsm list` 给出清晰错误。
+- 首次运行 `lsm ls` 在空配置下输出空表格而非报错。
+- 手改配置文件引入 YAML 语法错误，`lsm ls` 给出清晰错误。
 - 工作目录含空格、命令含引号，start / stop 正常。
 
 ---
@@ -602,7 +630,7 @@ Windows 集成测试可选用 `timeout /t 300` 或 `ping -n 300 127.0.0.1`。
 
 | 里程碑                     | 内容                                                 | 交付标准                                        |
 | -------------------------- | ---------------------------------------------------- | ----------------------------------------------- |
-| **M1：骨架与配置**         | `go.mod`、cobra 根命令、`config` 模块、`list` 子命令 | `lsm list` 能读取并展示配置                     |
+| **M1：骨架与配置**         | `go.mod`、cobra 根命令、`config` 模块、`ls` 子命令 | `lsm ls` 能读取并展示配置                       |
 | **M2：启动与停止（Unix）** | `process` 模块 Unix 实现、`start` / `stop`、PID 文件 | Linux/macOS 上能 start / stop 一个 `sleep` 服务 |
 | **M3：状态与重启**         | `ps`、`restart`、存活检查、陈旧 PID 处理             | `ps` 显示正确状态；`restart` 正常               |
 | **M4：增删交互**           | `add` 交互、`del` 交互与 `--force`                   | 交互流程完整，校验清晰                          |

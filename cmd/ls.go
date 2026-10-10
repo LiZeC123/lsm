@@ -5,9 +5,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func newListCmd() *cobra.Command {
+func newLsCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "list",
+		Use:   "ls",
 		Short: "List every configured service",
 		Args:  argsNone(),
 		RunE: func(cmd *cobra.Command, _ []string) error {

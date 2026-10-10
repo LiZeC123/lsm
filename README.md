@@ -61,16 +61,21 @@ Command: node /home/user/web/server.js --port 3000
 Working directory: /home/user/web
 Service 'web' added.
 
-# 2. 启动它
+# 2. 看看配置
+$ lsm ls
+NAME  COMMAND                                    WORK_DIR
+web   node /home/user/web/server.js --port 3000  /home/user/web
+
+# 3. 启动它
 $ lsm start web
 service 'web' started (pid 12345)
 
-# 3. 看看状态
+# 4. 看看状态
 $ lsm ps
 NAME  STATUS   PID    UPTIME
 web   running  12345  2h13m
 
-# 4. 停止并删除
+# 5. 停止并删除
 $ lsm stop web
 service 'web' stopped
 $ lsm del web
@@ -88,8 +93,9 @@ Service 'web' deleted.
 | `lsm stop <name>`    | 停止指定服务（停止未运行的服务也算成功）   |
 | `lsm restart <name>` | 重启指定服务；未运行则直接启动             |
 | `lsm ps`             | 列出所有服务的运行状态                     |
-| `lsm list`           | 列出所有已配置的服务                       |
+| `lsm ls`             | 列出所有已配置的服务                       |
 | `lsm add`            | 交互式添加服务                             |
+| `lsm update <name>`  | 交互式修改服务的命令或工作目录             |
 | `lsm del <name>`     | 删除服务配置（`--force` 会先停止再删除）   |
 | `lsm version`        | 打印版本、git 修订与构建时间（`--version` 等价） |
 
@@ -102,11 +108,24 @@ web     running  12345  2h13m
 api     stopped  -      -
 worker  running  12401  8m
 
-$ lsm list
+$ lsm ls
 NAME  COMMAND                                    WORK_DIR
 api   ./bin/api -config ./conf/api.yaml          /opt/services/api
 web   node /home/user/web/server.js --port 3000  /home/user/web
 ```
+
+`lsm update` 先打印当前值，直接回车表示该项不变：
+
+```
+$ lsm update web
+Current command: node /home/user/web/server.js --port 3000
+New command (empty to keep): node /home/user/web/server.js --port 8080
+Current working directory: /home/user/web
+New working directory (empty to keep):
+Service 'web' updated.
+```
+
+服务正在运行时也能改，但运行中的进程仍用旧命令，此时会多打印一行提示说明需要重启生效。
 
 ---
 

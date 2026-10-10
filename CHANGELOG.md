@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- `lsm update <name>`：交互式修改服务的 `command` 或 `work_dir`。每个问题先打印当前值，
+  空输入表示该项不修改；两项都未改动时不写配置文件。服务运行中允许修改，运行中的进程
+  仍使用旧命令，此时额外提示需重启生效。工作目录复用 `add` 的校验与相对路径解析。
+
+### Changed
+
+- `lsm list` 重命名为 `lsm ls`，与 `ps` 风格统一。旧名字不再是命令（cobra 会在
+  `lsm list` 时提示 `Did you mean this? ls`）。
+
 ## [0.1.0]
 
 首个版本，实现 dev.md 中的 M1–M6 里程碑。

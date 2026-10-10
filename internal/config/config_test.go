@@ -300,7 +300,7 @@ func TestLoadValidatesSchema(t *testing.T) {
 }
 
 // Load must not touch the filesystem: a service whose work_dir disappeared has
-// to stay visible in `lsm list` / `lsm ps` and removable through `lsm del`.
+// to stay visible in `lsm ls` / `lsm ps` and removable through `lsm del`.
 func TestLoadAcceptsAServiceWhoseWorkDirIsGone(t *testing.T) {
 	dir, _ := scratch(t)
 	path := filepath.Join(dir, "config.yaml")

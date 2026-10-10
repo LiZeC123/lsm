@@ -35,7 +35,7 @@ directory.`,
 				return validateNewName(s.cfg, answer)
 			})
 			if err != nil {
-				return inputError(err)
+				return inputError("add", err)
 			}
 
 			command, err := prompter.AskValidated("Command", func(answer string) (string, error) {
@@ -45,12 +45,12 @@ directory.`,
 				return answer, nil
 			})
 			if err != nil {
-				return inputError(err)
+				return inputError("add", err)
 			}
 
 			workDir, err := prompter.AskValidated("Working directory", resolveWorkDir)
 			if err != nil {
-				return inputError(err)
+				return inputError("add", err)
 			}
 
 			s.cfg.Services[name] = config.Service{Command: command, WorkDir: workDir}
@@ -97,9 +97,9 @@ func resolveWorkDir(answer string) (string, error) {
 }
 
 // inputError turns an exhausted input stream into a message a user can act on.
-func inputError(err error) error {
+func inputError(verb string, err error) error {
 	if errors.Is(err, ui.ErrInputClosed) {
-		return errs.New(errs.General, "add: input ended before the service was complete")
+		return errs.New(errs.General, "%s: input ended before the service was complete", verb)
 	}
 	return err
 }

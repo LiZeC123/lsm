@@ -13,7 +13,7 @@ import (
 // Load reads and validates the configuration file at path.
 //
 // A missing file is not an error: it yields an empty configuration so that a
-// fresh install can already run `lsm list` (dev.md §10.4).
+// fresh install can already run `lsm ls` (dev.md §10.4).
 func Load(path string) (*Config, error) {
 	raw, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {

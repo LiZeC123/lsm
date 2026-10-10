@@ -78,7 +78,7 @@ func (c *Config) Validate() error {
 //
 // Load itself only validates the schema (see Validate), so a service whose
 // work_dir has gone missing — a deleted directory or an unmounted volume — is
-// still listed by `lsm list` / `lsm ps` and can still be removed with `lsm del`.
+// still listed by `lsm ls` / `lsm ps` and can still be removed with `lsm del`.
 func CheckWorkDir(dir string) error {
 	shown := filepath.ToSlash(dir)
 	info, err := os.Stat(dir)

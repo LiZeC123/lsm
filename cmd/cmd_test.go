@@ -52,16 +52,19 @@ func TestNoArgsPrintsHelp(t *testing.T) {
 	if code != int(errs.OK) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
-	for _, want := range []string{"Usage:", "lsm [command]", "list"} {
+	for _, want := range []string{"Usage:", "lsm [command]", "\n  ls "} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("help output is missing %q:\n%s", want, stdout)
 		}
+	}
+	if strings.Contains(stdout, "\n  list ") {
+		t.Errorf("the list command must be gone after the rename to ls:\n%s", stdout)
 	}
 }
 
 func TestListWithNoConfigFilePrintsAnEmptyTable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yaml")
-	stdout, stderr, code := cli(t, "list", "--config", path)
+	stdout, stderr, code := cli(t, "ls", "--config", path)
 
 	if code != int(errs.OK) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
@@ -75,7 +78,7 @@ func TestListWithNoConfigFilePrintsAnEmptyTable(t *testing.T) {
 }
 
 func TestListRendersEveryServiceInSortedOrder(t *testing.T) {
-	stdout, stderr, code := cli(t, "list", "--config", configFixture(t))
+	stdout, stderr, code := cli(t, "ls", "--config", configFixture(t))
 
 	if code != int(errs.OK) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
@@ -102,7 +105,7 @@ func TestListReportsABrokenConfigOnStderr(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stdout, stderr, code := cli(t, "list", "--config", path)
+	stdout, stderr, code := cli(t, "ls", "--config", path)
 	if code != int(errs.ConfigRead) {
 		t.Fatalf("exit = %d, want %d", code, errs.ConfigRead)
 	}
@@ -120,8 +123,8 @@ func TestUsageErrorsExitWithCodeTwo(t *testing.T) {
 		args []string
 	}{
 		{"unknown command", []string{"bogus"}},
-		{"unknown flag", []string{"list", "--bogus"}},
-		{"unexpected argument", []string{"list", "extra"}},
+		{"unknown flag", []string{"ls", "--bogus"}},
+		{"unexpected argument", []string{"ls", "extra"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,11 +143,11 @@ func TestLSMConfigEnvironmentVariableIsHonoured(t *testing.T) {
 	path := configFixture(t)
 	t.Setenv("LSM_CONFIG", path)
 
-	stdout, stderr, code := cli(t, "list")
+	stdout, stderr, code := cli(t, "ls")
 	if code != int(errs.OK) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
 	if !strings.Contains(stdout, "web") {
-		t.Fatalf("service list was not loaded from $LSM_CONFIG:\n%s", stdout)
+		t.Fatalf("the service was not loaded from $LSM_CONFIG:\n%s", stdout)
 	}
 }

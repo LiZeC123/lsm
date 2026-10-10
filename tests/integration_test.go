@@ -66,6 +66,16 @@ func quotedIdleCommand() string {
 	return `echo "a b" && sleep 300`
 }
 
+// updatedIdleCommand is a second long-running command, distinct from
+// idleCommand, so an update can be shown to have really changed the stored
+// value (dev.md §5.9).
+func updatedIdleCommand() string {
+	if runtime.GOOS == "windows" {
+		return "ping -n 240 127.0.0.1"
+	}
+	return "sleep 240"
+}
+
 // result is what a single lsm invocation produced.
 type result struct {
 	stdout string
@@ -124,12 +134,12 @@ func TestFullLifecycle(t *testing.T) {
 	const name = "test-svc"
 
 	// A fresh installation must show an empty table rather than an error.
-	got := lsm(t, "", "list", "--config", cfgPath)
+	got := lsm(t, "", "ls", "--config", cfgPath)
 	if got.code != 0 {
-		t.Fatalf("list on a fresh install: exit %d (stderr: %s)", got.code, got.stderr)
+		t.Fatalf("ls on a fresh install: exit %d (stderr: %s)", got.code, got.stderr)
 	}
 	if !strings.HasPrefix(got.stdout, "NAME") {
-		t.Fatalf("list output has no header:\n%s", got.stdout)
+		t.Fatalf("ls output has no header:\n%s", got.stdout)
 	}
 
 	// 1. add, with the answers injected through stdin.
@@ -141,21 +151,45 @@ func TestFullLifecycle(t *testing.T) {
 		t.Fatalf("add output = %q", got.stdout)
 	}
 
-	// 2. list confirms the entry.
-	got = lsm(t, "", "list", "--config", cfgPath)
+	// 2. ls confirms the entry.
+	got = lsm(t, "", "ls", "--config", cfgPath)
 	if got.code != 0 {
-		t.Fatalf("list: exit %d (stderr: %s)", got.code, got.stderr)
+		t.Fatalf("ls: exit %d (stderr: %s)", got.code, got.stderr)
 	}
 	// The stored work_dir is normalised to forward slashes (dev.md §3.4), so
 	// compare against that form rather than the OS one.
 	if !strings.Contains(got.stdout, name) || !strings.Contains(got.stdout, filepath.ToSlash(workDir)) {
-		t.Fatalf("list does not show the new service:\n%s", got.stdout)
+		t.Fatalf("ls does not show the new service:\n%s", got.stdout)
+	}
+
+	// 2b. update the command, keeping the working directory.
+	got = lsm(t, updatedIdleCommand()+"\n\n", "update", name, "--config", cfgPath)
+	if got.code != 0 {
+		t.Fatalf("update: exit %d (stderr: %s)", got.code, got.stderr)
+	}
+	if !strings.Contains(got.stdout, "Service '"+name+"' updated.") {
+		t.Fatalf("update output = %q", got.stdout)
+	}
+
+	got = lsm(t, "", "ls", "--config", cfgPath)
+	if !strings.Contains(got.stdout, updatedIdleCommand()) {
+		t.Fatalf("ls does not show the updated command:\n%s", got.stdout)
 	}
 
 	// 3. start, observe, stop, observe.
 	got = lsm(t, "", "start", name, "--config", cfgPath)
 	if got.code != 0 {
 		t.Fatalf("start: exit %d (stderr: %s)", got.code, got.stderr)
+	}
+
+	// The updated command is what actually got started.
+	pidFile := filepath.Join(filepath.Dir(cfgPath), "run", name+".pid")
+	recorded, err := os.ReadFile(pidFile)
+	if err != nil {
+		t.Fatalf("cannot read the pid file: %v", err)
+	}
+	if !strings.Contains(string(recorded), updatedIdleCommand()) {
+		t.Fatalf("the pid file does not record the updated command:\n%s", recorded)
 	}
 	if !strings.HasPrefix(got.stdout, "service '"+name+"' started (pid ") {
 		t.Fatalf("start output = %q", got.stdout)
@@ -188,7 +222,7 @@ func TestFullLifecycle(t *testing.T) {
 		t.Fatalf("del output = %q", got.stdout)
 	}
 
-	got = lsm(t, "", "list", "--config", cfgPath)
+	got = lsm(t, "", "ls", "--config", cfgPath)
 	if strings.Contains(got.stdout, name) {
 		t.Fatalf("the service is still listed:\n%s", got.stdout)
 	}
@@ -235,7 +269,7 @@ func TestExitCodes(t *testing.T) {
 	if got := lsm(t, "", "stop", "ghost", "--config", cfgPath); got.code != 3 {
 		t.Errorf("stop unknown service: exit %d, want 3", got.code)
 	}
-	if got := lsm(t, "", "list", "--bogus"); got.code != 2 {
+	if got := lsm(t, "", "ls", "--bogus"); got.code != 2 {
 		t.Errorf("unknown flag: exit %d, want 2", got.code)
 	}
 	if got := lsm(t, "", "bogus"); got.code != 2 {
@@ -246,7 +280,7 @@ func TestExitCodes(t *testing.T) {
 	if err := os.WriteFile(broken, []byte("services:\n  web:\n    command: \"x\"\n   oops: 1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := lsm(t, "", "list", "--config", broken); got.code != 6 {
+	if got := lsm(t, "", "ls", "--config", broken); got.code != 6 {
 		t.Errorf("broken config: exit %d, want 6", got.code)
 	}
 
