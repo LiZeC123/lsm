@@ -3,6 +3,7 @@ package process
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -43,6 +44,15 @@ func TestWritePIDFileCreatesAPrivateRunDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the pid file must exist: %v", err)
+	}
+
+	// Windows only tracks a read-only flag, so the Unix permission bits cannot
+	// be asserted there.
+	if runtime.GOOS == "windows" {
+		return
+	}
 	dirInfo, err := os.Stat(filepath.Dir(path))
 	if err != nil {
 		t.Fatal(err)

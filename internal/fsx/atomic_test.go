@@ -3,9 +3,19 @@ package fsx
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
+
+// Windows only tracks a read-only flag, so os.Stat reports 0666 for a writable
+// file and 0777 for a directory instead of the Unix permission bits.
+func skipModeCheckOnWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits are not meaningful on Windows")
+	}
+}
 
 func TestWriteFileAtomicCreatesTheFileAndItsParents(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "a", "b", "file.txt")
@@ -21,16 +31,20 @@ func TestWriteFileAtomicCreatesTheFileAndItsParents(t *testing.T) {
 		t.Fatalf("content = %q", data)
 	}
 
-	info, err := os.Stat(filepath.Dir(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := info.Mode().Perm(); got != 0o700 {
-		t.Errorf("directory mode = %o, want 700", got)
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(filepath.Dir(path))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := info.Mode().Perm(); got != 0o700 {
+			t.Errorf("directory mode = %o, want 700", got)
+		}
 	}
 }
 
 func TestWriteFileAtomicAppliesTheModeToANewFile(t *testing.T) {
+	skipModeCheckOnWindows(t)
+
 	path := filepath.Join(t.TempDir(), "file.txt")
 	if err := WriteFileAtomic(path, []byte("x"), 0o600, 0o700); err != nil {
 		t.Fatal(err)
@@ -45,6 +59,8 @@ func TestWriteFileAtomicAppliesTheModeToANewFile(t *testing.T) {
 }
 
 func TestWriteFileAtomicKeepsTheModeOfAnExistingFile(t *testing.T) {
+	skipModeCheckOnWindows(t)
+
 	path := filepath.Join(t.TempDir(), "file.txt")
 	if err := os.WriteFile(path, []byte("old"), 0o600); err != nil {
 		t.Fatal(err)

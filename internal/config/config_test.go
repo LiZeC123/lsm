@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -155,6 +156,9 @@ func TestSaveCreatesTheDirectoryAndLeavesNoTemporaryFiles(t *testing.T) {
 }
 
 func TestSavePreservesTheModeOfAnExistingConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix permission bits are not meaningful on Windows")
+	}
 	dir, workDir := scratch(t)
 	path := filepath.Join(dir, "config.yaml")
 	cfg := &Config{Services: map[string]Service{"web": {Command: "run", WorkDir: workDir}}}

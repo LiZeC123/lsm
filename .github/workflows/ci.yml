@@ -32,24 +32,33 @@ jobs:
       - name: go vet
         run: go vet ./...
 
-      # TEMPORARY diagnostic split: one step per package so the CI status API
-      # (the only thing readable without repo admin) reveals which package
-      # fails on which OS. Collapse back into `go test ./...` once green.
+      # TEMPORARY diagnostic split: one step per package, each with
+      # `if: always()`, so the CI status API (the only thing readable without
+      # repo admin) reveals *every* failing package per OS in a single run.
+      # Collapse back into `go test ./...` once green.
       - name: go test (internal/config)
+        if: always()
         run: go test ./internal/config -count=1
       - name: go test (internal/errs)
+        if: always()
         run: go test ./internal/errs -count=1
       - name: go test (internal/fsx)
+        if: always()
         run: go test ./internal/fsx -count=1
       - name: go test (internal/process)
+        if: always()
         run: go test ./internal/process -count=1
       - name: go test (internal/service)
+        if: always()
         run: go test ./internal/service -count=1
       - name: go test (internal/ui)
+        if: always()
         run: go test ./internal/ui -count=1
       - name: go test (cmd)
+        if: always()
         run: go test ./cmd -count=1
       - name: go test (tests)
+        if: always()
         run: go test ./tests -count=1
 
       - name: go build
