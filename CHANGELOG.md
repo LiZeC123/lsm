@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-10
+
 ### Added
 
 - `lsm update <name>`：交互式修改服务的 `command` 或 `work_dir`。每个问题先打印当前值，
@@ -62,5 +64,6 @@
 - 不做并发写保护，假设同一时刻只有一个 lsm 进程写配置。
 - `ps` 只显示配置中登记的服务，配置已删除但 PID 文件残留的服务不可见。
 
-[Unreleased]: https://github.com/LiZeC123/lsm/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/LiZeC123/lsm/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/LiZeC123/lsm/releases/tag/v0.2.0
 [0.1.0]: https://github.com/LiZeC123/lsm/releases/tag/v0.1.0
