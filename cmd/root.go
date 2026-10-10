@@ -39,7 +39,11 @@ launched detached from the terminal, so they keep running after lsm exits.`,
 	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return errs.Classify(errs.Usage, err)
 	})
-	root.AddCommand(newListCmd())
+	root.AddCommand(
+		newStartCmd(),
+		newStopCmd(),
+		newListCmd(),
+	)
 	return root
 }
 
