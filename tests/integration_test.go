@@ -143,7 +143,7 @@ func TestFullLifecycle(t *testing.T) {
 	}
 
 	// 1. add, with the answers injected through stdin.
-	got = lsm(t, name+"\n"+idleCommand()+"\n"+workDir+"\n", "add", "--config", cfgPath)
+	got = lsm(t, idleCommand()+"\n"+workDir+"\n", "add", name, "--config", cfgPath)
 	if got.code != 0 {
 		t.Fatalf("add: exit %d (stderr: %s)", got.code, got.stderr)
 	}
@@ -234,7 +234,7 @@ func TestWorkDirWithSpacesAndQuotedCommand(t *testing.T) {
 	cfgPath, workDir := workspace(t, "work dir with spaces")
 	const name = "spaced"
 
-	if got := lsm(t, name+"\n"+quotedIdleCommand()+"\n"+workDir+"\n", "add", "--config", cfgPath); got.code != 0 {
+	if got := lsm(t, quotedIdleCommand()+"\n"+workDir+"\n", "add", name, "--config", cfgPath); got.code != 0 {
 		t.Fatalf("add: exit %d (stderr: %s)", got.code, got.stderr)
 	}
 
@@ -259,7 +259,7 @@ func TestExitCodes(t *testing.T) {
 	cfgPath, workDir := workspace(t, "work")
 	const name = "codes"
 
-	if got := lsm(t, name+"\n"+idleCommand()+"\n"+workDir+"\n", "add", "--config", cfgPath); got.code != 0 {
+	if got := lsm(t, idleCommand()+"\n"+workDir+"\n", "add", name, "--config", cfgPath); got.code != 0 {
 		t.Fatalf("add: exit %d (stderr: %s)", got.code, got.stderr)
 	}
 
@@ -306,7 +306,7 @@ func TestStalePIDFileIsSelfHealing(t *testing.T) {
 	cfgPath, workDir := workspace(t, "work")
 	const name = "stale"
 
-	if got := lsm(t, name+"\n"+idleCommand()+"\n"+workDir+"\n", "add", "--config", cfgPath); got.code != 0 {
+	if got := lsm(t, idleCommand()+"\n"+workDir+"\n", "add", name, "--config", cfgPath); got.code != 0 {
 		t.Fatalf("add: exit %d (stderr: %s)", got.code, got.stderr)
 	}
 
@@ -353,7 +353,7 @@ func TestRestartKeepsTheServiceRunning(t *testing.T) {
 	cfgPath, workDir := workspace(t, "work")
 	const name = "restarted"
 
-	if got := lsm(t, name+"\n"+idleCommand()+"\n"+workDir+"\n", "add", "--config", cfgPath); got.code != 0 {
+	if got := lsm(t, idleCommand()+"\n"+workDir+"\n", "add", name, "--config", cfgPath); got.code != 0 {
 		t.Fatalf("add: exit %d (stderr: %s)", got.code, got.stderr)
 	}
 	t.Cleanup(func() { _ = lsm(t, "", "stop", name, "--config", cfgPath) })
@@ -368,5 +368,44 @@ func TestRestartKeepsTheServiceRunning(t *testing.T) {
 	got := lsm(t, "", "ps", "--config", cfgPath)
 	if status := psStatus(t, got.stdout, name); status != "running" {
 		t.Fatalf("ps status = %q, want running:\n%s", status, got.stdout)
+	}
+}
+
+// TestRunInTheForeground covers `lsm run <name>` end to end: the configured
+// command runs attached to the terminal, its output is visible, lsm adds
+// nothing of its own, the exit status is mirrored and no PID file appears.
+func TestRunInTheForeground(t *testing.T) {
+	cfgPath, workDir := workspace(t, "work")
+	const name = "foreground"
+
+	if got := lsm(t, "echo foreground-output\n"+workDir+"\n", "add", name, "--config", cfgPath); got.code != 0 {
+		t.Fatalf("add: exit %d (stderr: %s)", got.code, got.stderr)
+	}
+
+	got := lsm(t, "", "run", name, "--config", cfgPath)
+	if got.code != 0 {
+		t.Fatalf("run: exit %d (stderr: %s)", got.code, got.stderr)
+	}
+	if !strings.Contains(got.stdout, "foreground-output") {
+		t.Fatalf("run output = %q, want the command output", got.stdout)
+	}
+	// The service must not be turned into a managed background process.
+	if got.stderr != "" {
+		t.Fatalf("run stderr = %q, want empty", got.stderr)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(cfgPath), "run", name+".pid")); !os.IsNotExist(err) {
+		t.Fatalf("run must not write a PID file, got %v", err)
+	}
+
+	// The command's exit status is passed through unchanged.
+	if got := lsm(t, "exit 7\n"+workDir+"\n", "add", "failing", "--config", cfgPath); got.code != 0 {
+		t.Fatalf("add failing: exit %d (stderr: %s)", got.code, got.stderr)
+	}
+	got = lsm(t, "", "run", "failing", "--config", cfgPath)
+	if got.code != 7 {
+		t.Fatalf("run failing: exit %d, want 7 (stderr: %s)", got.code, got.stderr)
+	}
+	if got.stdout != "" || got.stderr != "" {
+		t.Fatalf("a failing foreground command must not print lsm output: %q / %q", got.stdout, got.stderr)
 	}
 }

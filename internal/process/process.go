@@ -10,8 +10,11 @@ package process
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"time"
+
+	"github.com/LiZeC123/lsm/internal/config"
 )
 
 // ErrNotRunning reports that the recorded process no longer exists, either
@@ -75,6 +78,30 @@ func awaitStartup(cmd *exec.Cmd) (int, error) {
 	case <-time.After(startupGrace):
 		return pid, nil
 	}
+}
+
+// Run executes svc in the foreground, connected to the given standard streams,
+// and returns the exit status of the command.
+//
+// Unlike Launch it does not detach the process, does not discard the streams
+// and does not wait out the startup grace period: the caller sees exactly what
+// running the command in a terminal would show. A non-nil error means the
+// command could not be launched at all; a command that ran and failed is
+// reported through the status with a nil error, so the caller can mirror it.
+func Run(svc config.Service, stdin io.Reader, stdout, stderr io.Writer) (int, error) {
+	cmd := shellCommand(svc)
+	cmd.Stdin = stdin
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
+	if err := cmd.Run(); err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return exitStatus(exitErr), nil
+		}
+		return 0, fmt.Errorf("cannot run command: %w", err)
+	}
+	return 0, nil
 }
 
 // waitUntil polls check until it reports true or the timeout expires.

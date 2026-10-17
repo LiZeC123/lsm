@@ -61,6 +61,18 @@ func Wrap(code Code, err error, format string, args ...any) *Error {
 	return &Error{Code: code, Msg: msg, Err: err}
 }
 
+// ExitStatus carries an exit status that lsm did not choose, namely the status
+// of the command started by `lsm run`. The CLI returns it verbatim and prints
+// nothing, so a foreground run is indistinguishable from running the command
+// directly.
+type ExitStatus struct {
+	Status int
+}
+
+func (e *ExitStatus) Error() string {
+	return fmt.Sprintf("exit status %d", e.Status)
+}
+
 // Classify tags err with an exit code without altering its message.
 func Classify(code Code, err error) *Error {
 	if err == nil {

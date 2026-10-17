@@ -49,6 +49,7 @@ launched detached from the terminal, so they keep running after lsm exits.`,
 		newStartCmd(),
 		newStopCmd(),
 		newRestartCmd(),
+		newRunCmd(),
 		newPsCmd(),
 		newLsCmd(),
 		newUpdateCmd(),
@@ -74,6 +75,13 @@ func execute(root *cobra.Command, stdout, stderr io.Writer) int {
 	err := root.Execute()
 	if err == nil {
 		return int(errs.OK)
+	}
+	// `lsm run` mirrors the exit status of the command it started, including
+	// the cases where that status collides with lsm's own codes. Nothing is
+	// printed here: the command's own output already went to the terminal.
+	var exitStatus *errs.ExitStatus
+	if errors.As(err, &exitStatus) {
+		return exitStatus.Status
 	}
 	if isUsageError(err) {
 		err = errs.Classify(errs.Usage, err)

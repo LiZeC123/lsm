@@ -74,7 +74,8 @@ func (c *Config) Validate() error {
 
 // CheckWorkDir verifies that dir exists and is a directory. It is deliberately
 // left unclassified: the caller attaches the exit code its context requires,
-// which dev.md sets to 8 for start / restart (§5.2) and to 6 for add (§5.7).
+// which dev.md sets to 8 for start / restart / run (§5.2, §5.11); add and
+// update re-ask instead of exiting (§5.7, §5.9).
 //
 // Load itself only validates the schema (see Validate), so a service whose
 // work_dir has gone missing — a deleted directory or an unmounted volume — is

@@ -16,6 +16,16 @@ import (
 // redirections and variable expansion are the shell's business (dev.md §6.1).
 const shellPath = "/bin/sh"
 
+// shellCommand builds the shell invocation that interprets a service command.
+// The command string is handed over as a single argv entry, so lsm never parses
+// or rewrites it: quoting, pipes, redirections and variable expansion are the
+// shell's business (dev.md §6.1).
+func shellCommand(svc config.Service) *exec.Cmd {
+	cmd := exec.Command(shellPath, "-c", svc.Command)
+	cmd.Dir = svc.WorkDir
+	return cmd
+}
+
 // Launch starts svc detached from the terminal and returns its PID.
 //
 // The child becomes the leader of a new session, so it survives lsm exiting and
@@ -23,14 +33,26 @@ const shellPath = "/bin/sh"
 // deliberately left nil, which wires them to /dev/null and keeps the service
 // from polluting the lsm output (dev.md §6.1).
 func Launch(svc config.Service) (int, error) {
-	cmd := exec.Command(shellPath, "-c", svc.Command)
-	cmd.Dir = svc.WorkDir
+	cmd := shellCommand(svc)
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 
 	return awaitStartup(cmd)
+}
+
+// exitStatus renders the status of a finished command the way a shell reports
+// it: a process killed by a signal has no exit code of its own on Unix, so it
+// is mapped to 128+signal (dev.md §5.11).
+func exitStatus(err *exec.ExitError) int {
+	if code := err.ExitCode(); code >= 0 {
+		return code
+	}
+	if status, ok := err.Sys().(syscall.WaitStatus); ok && status.Signaled() {
+		return 128 + int(status.Signal())
+	}
+	return 1
 }
 
 // IsAlive reports whether the recorded process still exists (dev.md §6.6).

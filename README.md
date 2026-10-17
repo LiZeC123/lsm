@@ -54,9 +54,8 @@ go build -o lsm .
 ## 快速开始
 
 ```sh
-# 1. 交互式登记一个服务
-$ lsm add
-Service name: web
+# 1. 交互式登记一个服务，名字由参数给出
+$ lsm add web
 Command: node /home/user/web/server.js --port 3000
 Working directory: /home/user/web
 Service 'web' added.
@@ -92,9 +91,10 @@ Service 'web' deleted.
 | `lsm start <name>`   | 启动指定服务                               |
 | `lsm stop <name>`    | 停止指定服务（停止未运行的服务也算成功）   |
 | `lsm restart <name>` | 重启指定服务；未运行则直接启动             |
+| `lsm run <name>`     | 在前台运行服务，输出直接显示（临时调试用） |
 | `lsm ps`             | 列出所有服务的运行状态                     |
 | `lsm ls`             | 列出所有已配置的服务                       |
-| `lsm add`            | 交互式添加服务                             |
+| `lsm add <name>`     | 交互式添加服务，只需再输入命令与工作目录   |
 | `lsm update <name>`  | 交互式修改服务的命令或工作目录             |
 | `lsm del <name>`     | 删除服务配置（`--force` 会先停止再删除）   |
 | `lsm version`        | 打印版本、git 修订与构建时间（`--version` 等价） |
@@ -126,6 +126,20 @@ Service 'web' updated.
 ```
 
 服务正在运行时也能改，但运行中的进程仍用旧命令，此时会多打印一行提示说明需要重启生效。
+
+### 前台调试
+
+`lsm run <name>` 在配置的 `work_dir` 中通过系统 shell 直接运行服务的命令，并把
+stdin / stdout / stderr 接到当前终端。`lsm` 自身不输出任何内容，进程结束后退出码
+就是该命令的退出码，因此它等价于手工执行这条命令，适合临时查看日志或调试：
+
+```sh
+$ lsm run web
+Listening on http://127.0.0.1:3000
+```
+
+它不写 PID 文件，也不会检查或影响由 `lsm start` 启动的后台实例；Ctrl+C 的语义与
+直接运行命令相同。
 
 ---
 
@@ -160,7 +174,7 @@ services:
 
 配置文件可以直接手改。`lsm` 写回时使用 `gopkg.in/yaml.v3` 序列化，**不保留注释**，并采用原子写入（临时文件 + `fsync` + `rename`），进程崩溃不会导致配置被截断。
 
-路径答案可以写相对路径，`lsm add` 会把它解析成绝对路径再存储。
+路径答案可以写相对路径，`lsm add <name>` 会把它解析成绝对路径再存储。
 
 ### 含特殊字符的示例
 
@@ -229,7 +243,7 @@ PID 文件位于配置文件同级的 `run/` 子目录（权限 `0700`，文件�
 - **启动后存活确认窗口为 150ms。** 命令经由 shell 启动，所以「可执行文件不存在」不会让启动失败，只会让 shell 立刻退出。`lsm` 在 `Start()` 后等待 150ms 再检查进程是否存活，若已退出则视为启动失败（退出码 8）且不写 PID 文件。因此**执行完就退出的「一次性任务」不适合用 `lsm` 管理**。
 - **停止方式是强力的。** Unix 上向进程组发送 `SIGTERM`，最多等待 10 秒后升级为 `SIGKILL`；Windows 上直接 `taskkill /PID <pid> /T /F`（detached 控制台进程没有可接收 `WM_CLOSE` 的窗口）。
 - **PID 复用保护。** 记录的 PID 可能被系统回收给无关进程。Unix 上 `lsm` 只对「PGID 等于 PID」的进程组发信号（`Setsid` 保证自己启动的进程一定满足），Windows 上会比较 `GetProcessTimes` 得到的创建时间；两者不成立时按「未运行」处理，绝不误杀。
-- **不做日志收集。** 服务的标准流全部丢弃。需要日志请让命令自己重定向，例如 `command: './server >> /var/log/web.log 2>&1'`。
+- **不做日志收集。** 后台服务的标准流全部丢弃。需要日志请让命令自己重定向，例如 `command: './server >> /var/log/web.log 2>&1'`；只想临时看输出可以用 `lsm run <name>` 在前台运行。
 - **不做健康检查、自动重启、systemd / launchd / Windows Service 注册。**
 - **不做并发写保护。** 假设同一时刻只有一个 `lsm` 进程在写配置。
 - **`ps` 只显示配置中登记的服务**，配置里已删除但 PID 文件残留的服务不可见。

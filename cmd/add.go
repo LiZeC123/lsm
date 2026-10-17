@@ -13,30 +13,27 @@ import (
 
 func newAddCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:   "add",
+		Use:   "add <name>",
 		Short: "Add a service interactively",
-		Long: `Add a service by answering three questions.
+		Long: `Add a service whose name is given on the command line.
 
-The name must be unique and may only contain letters, digits, '-' and '_'. The
-command is stored verbatim and later handed to the system shell. The working
-directory must exist; a relative answer is resolved against the current
-directory.`,
-		Args: argsNone(),
-		RunE: func(cmd *cobra.Command, _ []string) error {
+The command and the working directory are asked interactively. The name must be
+unique and may only contain letters, digits, '-' and '_'. The command is stored
+verbatim and later handed to the system shell. The working directory must exist;
+a relative answer is resolved against the current directory.`,
+		Args: argsExact(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := newSession()
 			if err != nil {
+				return err
+			}
+			name := args[0]
+			if err := checkNewName(s.cfg, name); err != nil {
 				return err
 			}
 
 			out := cmd.OutOrStdout()
 			prompter := ui.NewPrompter(cmd.InOrStdin(), out)
-
-			name, err := prompter.AskValidated("Service name", func(answer string) (string, error) {
-				return validateNewName(s.cfg, answer)
-			})
-			if err != nil {
-				return inputError("add", err)
-			}
 
 			command, err := prompter.AskValidated("Command", func(answer string) (string, error) {
 				if answer == "" {
@@ -63,20 +60,22 @@ directory.`,
 	}
 }
 
-// validateNewName applies the dev.md §5.7 name rules: non-empty, unique and
-// within the allowed charset.
-func validateNewName(cfg *config.Config, answer string) (string, error) {
+// checkNewName applies the dev.md §5.7 name rules to the name given on the
+// command line: non-empty, within the allowed charset and not already used.
+// Invalid names are a usage error, while an existing name is a conflict with
+// the current configuration and gets the generic exit code.
+func checkNewName(cfg *config.Config, name string) error {
 	switch {
-	case answer == "":
-		return "", errors.New("the service name must not be empty")
-	case !config.ValidName(answer):
-		return "", fmt.Errorf("invalid service name '%s': must match %s and be 1-%d characters",
-			answer, config.NamePattern, config.MaxNameLen)
+	case name == "":
+		return errs.New(errs.Usage, "the service name must not be empty")
+	case !config.ValidName(name):
+		return errs.New(errs.Usage, "invalid service name '%s': must match %s and be 1-%d characters",
+			name, config.NamePattern, config.MaxNameLen)
 	}
-	if _, exists := cfg.Get(answer); exists {
-		return "", fmt.Errorf("service '%s' already exists", answer)
+	if _, exists := cfg.Get(name); exists {
+		return errs.New(errs.General, "service '%s' already exists", name)
 	}
-	return answer, nil
+	return nil
 }
 
 // resolveWorkDir turns an interactive answer into the value stored on disk.

@@ -5,6 +5,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- `lsm run <name>`：在配置的 `work_dir` 中通过系统 shell 前台运行服务，stdin / stdout /
+  stderr 直接接到当前终端，退出码原样透传，用于临时调试。不写 PID 文件，也不检查或
+  影响由 `start` 启动的后台实例。
+
+### Changed
+
+- `lsm add` 改为 `lsm add <name>`：服务名由位置参数指定，进入后只再交互询问命令与
+  工作目录。名字非法（退出码 2）或已存在（退出码 1）时直接报错，不再重复提问。
+
 ## [0.2.0] - 2026-10-10
 
 ### Added

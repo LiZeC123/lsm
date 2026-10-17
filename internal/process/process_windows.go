@@ -47,14 +47,20 @@ var taskkillCommand = func(pid int) ([]byte, error) {
 	return exec.Command("taskkill", "/PID", strconv.Itoa(pid), "/T", "/F").CombinedOutput()
 }
 
-// Launch starts svc detached from the console and returns its PID.
-//
+// shellCommand builds the shell invocation that interprets a service command.
 // Go assembles the arguments into a command line, so a command containing
 // complex quoting has to be written the way cmd.exe expects it (dev.md §6.2).
-// The standard streams are left nil, which sends them to the null device.
-func Launch(svc config.Service) (int, error) {
+func shellCommand(svc config.Service) *exec.Cmd {
 	cmd := exec.Command(shellPath, "/S", "/C", svc.Command)
 	cmd.Dir = svc.WorkDir
+	return cmd
+}
+
+// Launch starts svc detached from the console and returns its PID.
+//
+// The standard streams are left nil, which sends them to the null device.
+func Launch(svc config.Service) (int, error) {
+	cmd := shellCommand(svc)
 	cmd.Stdin = nil
 	cmd.Stdout = nil
 	cmd.Stderr = nil
@@ -63,6 +69,16 @@ func Launch(svc config.Service) (int, error) {
 	}
 
 	return awaitStartup(cmd)
+}
+
+// exitStatus reports the exit code cmd.exe recorded. Windows has no signal
+// death status, but ExitCode may still be -1 for a process that was terminated
+// by an external tool, so an unusable status becomes the generic failure code.
+func exitStatus(err *exec.ExitError) int {
+	if code := err.ExitCode(); code >= 0 {
+		return code
+	}
+	return 1
 }
 
 // IsAlive reports whether the recorded process still exists (dev.md §6.6).

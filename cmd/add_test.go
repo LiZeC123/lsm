@@ -23,18 +23,21 @@ func addFixture(t *testing.T) (cfgPath, workDir string) {
 
 func TestAddInteractively(t *testing.T) {
 	cfgPath, workDir := addFixture(t)
-	stdin := "web\nnode ./server.js --port 3000\n" + workDir + "\n"
+	stdin := "node ./server.js --port 3000\n" + workDir + "\n"
 
-	stdout, stderr, code := run(t, stdin, "add", "--config", cfgPath)
+	stdout, stderr, code := run(t, stdin, "add", "web", "--config", cfgPath)
 	if code != int(errs.OK) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
-	// The three questions in the order documented in dev.md §5.7, then the
-	// confirmation line.
-	for _, want := range []string{"Service name: ", "Command: ", "Working directory: ", "Service 'web' added.\n"} {
+	// The name comes from the command line, so only the two remaining
+	// questions are asked (dev.md §5.7), followed by the confirmation line.
+	for _, want := range []string{"Command: ", "Working directory: ", "Service 'web' added.\n"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout is missing %q:\n%s", want, stdout)
 		}
+	}
+	if strings.Contains(stdout, "Service name:") {
+		t.Errorf("the name must not be asked for any more:\n%s", stdout)
 	}
 
 	cfg, err := config.Load(cfgPath)
@@ -56,21 +59,15 @@ func TestAddInteractively(t *testing.T) {
 func TestAddRejectsInvalidAnswersAndAsksAgain(t *testing.T) {
 	cfgPath, workDir := addFixture(t)
 	stdin := strings.Join([]string{
-		"bad name!",            // invalid name
-		"",                     // still empty
-		"web",                  // accepted
 		"",                     // empty command
 		"node server.js",       // accepted
 		"/nope/does-not-exist", // missing directory
 		workDir,                // accepted
 	}, "\n") + "\n"
 
-	stdout, stderr, code := run(t, stdin, "add", "--config", cfgPath)
+	stdout, stderr, code := run(t, stdin, "add", "web", "--config", cfgPath)
 	if code != int(errs.OK) {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
-	}
-	if strings.Count(stdout, "Service name: ") != 3 {
-		t.Errorf("the name question should have been asked three times:\n%s", stdout)
 	}
 	if strings.Count(stdout, "Command: ") != 2 {
 		t.Errorf("the command question should have been asked twice:\n%s", stdout)
@@ -78,7 +75,7 @@ func TestAddRejectsInvalidAnswersAndAsksAgain(t *testing.T) {
 	if strings.Count(stdout, "Working directory: ") != 2 {
 		t.Errorf("the directory question should have been asked twice:\n%s", stdout)
 	}
-	for _, want := range []string{"must not be empty", "invalid service name", "is not accessible"} {
+	for _, want := range []string{"must not be empty", "is not accessible"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout is missing the %q hint:\n%s", want, stdout)
 		}
@@ -95,7 +92,7 @@ func TestAddRejectsInvalidAnswersAndAsksAgain(t *testing.T) {
 
 func TestAddRejectsADuplicateName(t *testing.T) {
 	cfgPath, workDir := addFixture(t)
-	// Pre-populate the config with a service that the interactive session will
+	// Pre-populate the config with a service whose name the command line will
 	// then try to reuse.
 	existing := &config.Config{Services: map[string]config.Service{
 		"web": {Command: "run", WorkDir: filepath.ToSlash(workDir)},
@@ -104,34 +101,51 @@ func TestAddRejectsADuplicateName(t *testing.T) {
 		t.Fatalf("Save: %v", err)
 	}
 
-	stdin := strings.Join([]string{"web", "web2", "run2", workDir}, "\n") + "\n"
-	stdout, stderr, code := run(t, stdin, "add", "--config", cfgPath)
-	if code != int(errs.OK) {
-		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
+	stdout, stderr, code := run(t, "run2\n"+workDir+"\n", "add", "web", "--config", cfgPath)
+	if code != int(errs.General) {
+		t.Fatalf("exit = %d, want %d (stderr: %s)", code, errs.General, stderr)
 	}
-	if !strings.Contains(stdout, "service 'web' already exists") {
-		t.Fatalf("stdout is missing the duplicate hint:\n%s", stdout)
+	if !strings.Contains(stderr, "service 'web' already exists") {
+		t.Fatalf("stderr is missing the duplicate hint: %q", stderr)
 	}
-	if n := strings.Count(stdout, "Service name: "); n != 2 {
-		t.Fatalf("the name question should have been asked twice, got %d:\n%s", n, stdout)
+	// The name is rejected before anything is asked or written.
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want empty", stdout)
 	}
 
 	cfg, err := config.Load(cfgPath)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if _, ok := cfg.Get("web"); !ok {
-		t.Error("the original service must be kept")
+	if svc, ok := cfg.Get("web"); !ok || svc.Command != "run" {
+		t.Fatalf("the original service must be kept: %+v", svc)
 	}
-	if svc, ok := cfg.Get("web2"); !ok || svc.Command != "run2" {
-		t.Fatalf("the new service was not added: %+v", svc)
+}
+
+func TestAddRejectsAnInvalidName(t *testing.T) {
+	cfgPath, workDir := addFixture(t)
+
+	for _, name := range []string{"bad name!", ""} {
+		stdout, stderr, code := run(t, "cmd\n"+workDir+"\n", "add", name, "--config", cfgPath)
+		if code != int(errs.Usage) {
+			t.Errorf("add %q exit = %d, want %d (stderr: %s)", name, code, errs.Usage, stderr)
+		}
+		if !strings.Contains(stderr, "service name") {
+			t.Errorf("add %q stderr = %q", name, stderr)
+		}
+		if stdout != "" {
+			t.Errorf("add %q stdout = %q, want empty", name, stdout)
+		}
+	}
+	if _, err := os.Stat(cfgPath); !os.IsNotExist(err) {
+		t.Fatalf("no config file must be written, got %v", err)
 	}
 }
 
 func TestAddWithClosedInputFails(t *testing.T) {
 	cfgPath, _ := addFixture(t)
 
-	stdout, stderr, code := run(t, "", "add", "--config", cfgPath)
+	stdout, stderr, code := run(t, "", "add", "web", "--config", cfgPath)
 	if code != int(errs.General) {
 		t.Fatalf("exit = %d, want %d", code, errs.General)
 	}
@@ -146,11 +160,16 @@ func TestAddWithClosedInputFails(t *testing.T) {
 	}
 }
 
-func TestAddRejectsStrayArguments(t *testing.T) {
+func TestAddRequiresExactlyOneServiceName(t *testing.T) {
 	cfgPath, _ := addFixture(t)
 
-	if _, stderr, code := run(t, "", "add", "extra", "--config", cfgPath); code != int(errs.Usage) {
-		t.Fatalf("exit = %d, want %d (stderr: %s)", code, errs.Usage, stderr)
+	for _, args := range [][]string{
+		{"add", "--config", cfgPath},
+		{"add", "a", "b", "--config", cfgPath},
+	} {
+		if _, stderr, code := run(t, "", args...); code != int(errs.Usage) {
+			t.Errorf("%v exit = %d, want %d (stderr: %s)", args, code, errs.Usage, stderr)
+		}
 	}
 }
 
